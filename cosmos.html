@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+<head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>cosmos</title>
+        <style>
+                body{
+                        font-size: 1rem;
+                        margin: 0;
+                        background: #1f3557;
+                        color: #e8eef7;
+                        font-family: sans-serif;
+                        overflow: hidden;
+                }
+                #panel{
+                        position: fixed; top: 16px; left: 16px; z-index: 1000;
+                        line-height: 2;
+                }
+                button{ font-size: 1rem; margin-right: 6px; padding: 6px 12px; }
+                #monitor{
+                        position: relative;
+                        width: 100vw; height: 100vh;
+                }
+                .shape{
+                        position: absolute;
+                        top: 50%; left: 50%;
+                }
+                .shape svg{
+                        display: block;
+                        width: 100%; height: 100%;
+                        overflow: visible;
+                }
+                .shape polygon{
+                        fill: none;
+                        stroke-width: 1.5;
+                        vector-effect: non-scaling-stroke;
+                }
+
+                #stage{
+                        display: none;
+                        position: fixed; top: 0; left: 0;
+                        width: 100%; height: 100%;
+                        background: #ffffff;
+                        z-index: 2000;
+                        touch-action: none;     
+                        cursor: crosshair;
+                }
+                #stage canvas{
+                        position: absolute; top: 0; left: 0;
+                        width: 100%; height: 100%;
+                }
+                #stageTitle{
+                        position: absolute; top: 50%; left: 50%;
+                        transform: translate(-50%, -50%);
+                        text-align: center;
+                        color: #8f9a92;
+                        pointer-events: none;
+                        transition: opacity 1.2s;
+                }
+                #stageTitle h1{ margin: 0; font-weight: 300; font-size: 2.6rem; letter-spacing: 0.04em; }
+                #stageTitle p{ margin: 8px 0 0; font-size: 0.95rem; }
+                #stageBar{
+                        position: absolute; top: 16px; right: 16px; z-index: 10;
+                }
+                #stageBar button{ background: #fff; border: 1px solid #c9d0cb; color: #4a554d; }
+        </style>
+</head>
+<body>
+<div id="panel">
+        <button onclick="typeChange('tri')">triangle</button>
+        <button onclick="typeChange('sq')">rectangle</button>
+        <button id="textMakeBut" onclick="textMake(); growSync();">add</button>
+        <button onclick="startStage()">start</button>
+        <br>
+        growth <input type="range" id="growRange" min="1" max="120" value="1" oninput="growChange(this.value)">
+        <span id="growText">1</span>
+        <br>
+        repeat <input type="range" min="1" max="16" value="8" oninput="petalChange(this.value)">
+        <span id="petalText">8</span>
+        <br>
+        swing <input type="range" min="0" max="90" value="12" oninput="morphChange(this.value)">
+        <span id="morphText">12</span>
+        <br>
+        <span id="info"></span>
+</div>
+<div id="monitor"></div>
+
+<div id="stage">
+        <canvas id="hyphaCanvas"></canvas>
+        <canvas id="sporeCanvas"></canvas>
+        <div id="stageTitle">
+                <h1>cosmos</h1>
+                <p>균사우주 · 누른 채로 끌어서 포자를 퍼뜨려 보세요</p>
+        </div>
+        <div id="stageBar">
+                <button onclick="clearStage()">지우기</button>
+                <button onclick="endStage()">돌아가기</button>
+        </div>
+</div>
+
+        <script>
+let a = 1;
+let b = 0;
+
+let petals = 8;     
+let morph = 12;    
+let type = "tri";  
+let count = 1;    
+
+function textMake(){
+        a++;
+        b = b + a;
+
+        let copies = Math.min(a - 1, petals);
+        let radius = Math.sqrt(a - 2) * 20;
+        let size = 14 + a * 0.9;
+        let spin = a * morph;
+        let color = "hsl(" + (a * 3 + 180) + ", 80%, 72%)";
+
+        let points = "50,8 6,88 94,88";
+        if(type == "sq"){ points = "10,10 90,10 90,90 10,90"; }
+
+        for(let j = 0 ; j < copies ; j++){
+                let angle = b + j * (360 / copies);
+                monitor.innerHTML += "<div class='shape' style='"
+                        + "width:" + size + "px; height:" + size + "px;"
+                        + "transform: translate(-50%, -50%) rotate(" + angle + "deg)"
+                        + " translateY(-" + radius + "px) rotate(" + spin + "deg);"
+                        + "'>"
+                        + "<svg viewBox='0 0 100 100'><polygon points='" + points + "' stroke='" + color + "'/></svg>"
+                        + "</div>";
+        }
+
+        info.innerHTML = "a " + a + " b " + b;
+}
+
+function drawAll(){
+        a = 1;
+        b = 0;
+        monitor.innerHTML = "";
+        for(i = 1 ; i <= count ; i++){ textMake(); }
+}
+
+function growChange(value){
+        count = Number(value);
+        growText.innerHTML = value;
+        drawAll();
+}
+
+function growSync(){
+        count = a - 1;
+        growRange.value = count;
+        growText.innerHTML = count;
+}
+
+function typeChange(value){
+        type = value;
+        drawAll();
+}
+
+function petalChange(value){
+        petals = Number(value);
+        petalText.innerHTML = value;
+        drawAll();
+}
+
+function morphChange(value){
+        morph = Number(value);
+        morphText.innerHTML = value;
+        drawAll();
+}
+
+drawAll();
+
+
+let hypha = hyphaCanvas.getContext("2d"); 
+let spore = sporeCanvas.getContext("2d");   
+
+let spores = [];     
+let tips = [];         
+let drawing = false;   
+let lastX = 0;
+let lastY = 0;
+let running = false;
+let sporeImage = null; 
+let IMG = 700;        
+
+function makeSporeImage(){
+        let c = document.createElement("canvas");
+        c.width = IMG * 2;
+        c.height = IMG * 2;
+        let ctx = c.getContext("2d");
+        ctx.scale(2, 2);
+        ctx.translate(IMG / 2, IMG / 2);
+        ctx.lineWidth = 1.2;
+
+        let pts = [[50, 8], [6, 88], [94, 88]];
+        if(type == "sq"){ pts = [[10, 10], [90, 10], [90, 90], [10, 90]]; }
+
+        let aa = 1;
+        let bb = 0;
+        for(let i = 1 ; i <= count ; i++){
+                aa++;
+                bb = bb + aa;
+
+                let copies = Math.min(aa - 1, petals);
+                let radius = Math.sqrt(aa - 2) * 20;
+                let size = 14 + aa * 0.9;
+                let spin = aa * morph;
+                ctx.strokeStyle = "hsl(" + (aa * 3 + 180) + ", 55%, 40%)"; 
+
+                for(let j = 0 ; j < copies ; j++){
+                        let angle = bb + j * (360 / copies);
+                        ctx.save();
+                        ctx.rotate(angle * Math.PI / 180);
+                        ctx.translate(0, -radius);
+                        ctx.rotate(spin * Math.PI / 180);
+                        ctx.beginPath();
+                        for(let k = 0 ; k < pts.length ; k++){
+                                let x = (pts[k][0] / 100 - 0.5) * size;
+                                let y = (pts[k][1] / 100 - 0.5) * size;
+                                if(k == 0){ ctx.moveTo(x, y); } else { ctx.lineTo(x, y); }
+                        }
+                        ctx.closePath();
+                        ctx.stroke();
+                        ctx.restore();
+                }
+        }
+        return c;
+}
+
+function resizeStage(){
+        let dpr = window.devicePixelRatio || 1;
+        hyphaCanvas.width = innerWidth * dpr;
+        hyphaCanvas.height = innerHeight * dpr;
+        sporeCanvas.width = innerWidth * dpr;
+        sporeCanvas.height = innerHeight * dpr;
+        hypha.setTransform(dpr, 0, 0, dpr, 0, 0);
+        spore.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function startStage(){
+        sporeImage = makeSporeImage();
+        stage.style.display = "block";
+        stageTitle.style.opacity = 1;
+        resizeStage();
+        clearStage();
+        if(!running){
+                running = true;
+                requestAnimationFrame(loop);
+        }
+}
+
+function endStage(){
+        stage.style.display = "none";
+        running = false;
+}
+
+function clearStage(){
+        spores = [];
+        tips = [];
+        hypha.clearRect(0, 0, innerWidth, innerHeight);
+        spore.clearRect(0, 0, innerWidth, innerHeight);
+}
+
+function addSpore(x, y, dx, dy){
+        spores.push({
+                x: x, y: y,
+                vx: dx * 0.02, vy: dy * 0.02,   
+                age: 0, life: 260,
+                rot: Math.random() * 360,
+                turn: (Math.random() - 0.5) * 0.4
+        });
+        if(spores.length > 24){ spores.shift(); }
+
+        for(let k = 0 ; k < 3 ; k++){
+                tips.push({ x: x, y: y, ang: Math.random() * Math.PI * 2, life: 60 + Math.random() * 90 });
+        }
+}
+
+stage.addEventListener("pointerdown", function(e){
+        if(e.target.tagName == "BUTTON"){ return; }
+        drawing = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        addSpore(lastX, lastY, 0, 0);
+        stageTitle.style.opacity = 0;
+        stage.setPointerCapture(e.pointerId);
+});
+
+stage.addEventListener("pointermove", function(e){
+        if(!drawing){ return; }
+        let dx = e.clientX - lastX;
+        let dy = e.clientY - lastY;
+        if(Math.sqrt(dx * dx + dy * dy) < 36){ return; }   
+
+        hypha.strokeStyle = "rgba(60, 72, 64, 0.6)";
+        hypha.lineWidth = 1.2;
+        hypha.beginPath();
+        hypha.moveTo(lastX, lastY);
+        hypha.lineTo(e.clientX, e.clientY);
+        hypha.stroke();
+
+        addSpore(e.clientX, e.clientY, dx, dy);
+        lastX = e.clientX;
+        lastY = e.clientY;
+});
+
+stage.addEventListener("pointerup", function(){ drawing = false; });
+stage.addEventListener("pointercancel", function(){ drawing = false; });
+window.addEventListener("resize", function(){ if(running){ resizeStage(); } });
+
+function loop(){
+        if(!running){ return; }
+
+        hypha.globalCompositeOperation = "destination-out";
+        hypha.fillStyle = "rgba(0, 0, 0, 0.012)";
+        hypha.fillRect(0, 0, innerWidth, innerHeight);
+        hypha.globalCompositeOperation = "source-over";
+
+        hypha.strokeStyle = "rgba(70, 82, 74, 0.5)";
+        hypha.lineWidth = 0.7;
+        hypha.beginPath();
+        for(let i = tips.length - 1 ; i >= 0 ; i--){
+                let t = tips[i];
+                let nx = t.x + Math.cos(t.ang) * 1.6;
+                let ny = t.y + Math.sin(t.ang) * 1.6;
+                hypha.moveTo(t.x, t.y);
+                hypha.lineTo(nx, ny);
+                t.x = nx;
+                t.y = ny;
+                t.ang = t.ang + (Math.random() - 0.5) * 0.5;
+                t.life--;
+
+                if(Math.random() < 0.025 && tips.length < 500){
+                        let side = Math.random() < 0.5 ? -1 : 1;
+                        tips.push({ x: nx, y: ny, ang: t.ang + side * (0.4 + Math.random() * 0.5), life: t.life * 0.7 });
+                }
+                if(t.life <= 0){ tips.splice(i, 1); }
+        }
+        hypha.stroke();
+
+        spore.clearRect(0, 0, innerWidth, innerHeight);
+        for(let i = spores.length - 1 ; i >= 0 ; i--){
+                let s = spores[i];
+                s.age++;
+                let t = s.age / s.life;                
+                let grow = 1 - Math.pow(1 - t, 3);      
+                let scale = 0.05 + grow * 1.3;
+                let alpha = t < 0.08 ? t / 0.08 : Math.pow(1 - t, 1.4);
+
+                s.x = s.x + s.vx;
+                s.y = s.y + s.vy;
+                s.vx = s.vx * 0.99;
+                s.vy = s.vy * 0.99;
+                s.rot = s.rot + s.turn;
+
+                spore.save();
+                spore.translate(s.x, s.y);
+                spore.rotate(s.rot * Math.PI / 180);
+                spore.globalAlpha = alpha;
+                let w = IMG * scale;
+                spore.drawImage(sporeImage, -w / 2, -w / 2, w, w);
+                spore.restore();
+
+                if(s.age >= s.life){ spores.splice(i, 1); }
+        }
+
+        requestAnimationFrame(loop);
+}
+        </script>
+</body>
+</html>
